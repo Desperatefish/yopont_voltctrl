@@ -29,7 +29,14 @@ jobs:
 
     steps:
       # 第一步：把 GitHub 仓库的代码 checkout 到 runner 本地
-      - uses: actions/checkout@v4
+     - name: Checkout via SSH
+       uses: actions/checkout@v4
+       with:
+        repository: Desperatefish/yopont_voltctrl
+        ssh-key: ${{ secrets.SSH_PRIVATE_KEY }}   # 如果你想把私钥放 secrets 里
+        persist-credentials: false
+        fetch-depth: 1
+
 
       # 第二步：确认工具链和 qmake 可用
       - name: Show toolchain & qmake

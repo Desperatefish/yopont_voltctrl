@@ -1,0 +1,94 @@
+name: Build RK3568 (qmake Release)   # 工作流的名字，出现在 GitHub Actions 页面
+
+# 触发条件：当你 push 或者发起 PR 时，这个工作流会自动运行
+on: [push, pull_request]
+
+jobs:
+  build:
+    runs-on: self-hosted   # 指定在你自己的 VM (self-hosted runner) 上跑，而不是 GitHub 云机
+
+    # 环境变量（方便下面引用，路径你要根据自己情况改）
+    env:
+      # 工具链目录（包含 aarch64-none-linux-gnu-gcc/g++）
+      TOOLCHAIN: /home/eric/gcc-arm-10.3-2021.07-x86_64-aarch64-none-linux-gnu
+
+      # 工具链的 bin 路径（专门放 gcc/g++ 的地方）
+      GCC_BIN:  /home/eric/gcc-arm-10.3-2021.07-x86_64-aarch64-none-linux-gnu/bin
+
+      # qmake 路径（来自你交叉编译的 Qt 5.14.2 for arm64）
+      QMAKE:    /home/eric/gcc-arm-10.3-2021.07-x86_64-aarch64-none-linux-gnu/Qt-5.14.2-arm64/bin/qmake
+
+      # VMware 共享目录（可选，如果你想把结果直接拷贝到 Windows）
+      SHARE_DIR: /mnt/hgfs/share
+
+      # 你的 Qt 项目文件名（注意修改成你真实的 .pro 文件名）
+      PRO_FILE: DistAreaVoltCtrl.pro
+
+      # make 的并发度（你 VM 有 8 核，可以用 4 来平衡内存）
+      MAKEFLAGS: -j4
+
+    steps:
+      # 第一步：把 GitHub 仓库的代码 checkout 到 runner 本地
+      - uses: actions/checkout@v4
+
+      # 第二步：确认工具链和 qmake 可用
+      - name: Show toolchain & qmake
+        run: |
+          export PATH="$GCC_BIN:$(dirname "$QMAKE"):$PATH"
+          which aarch64-none-linux-gnu-gcc     # 看看 gcc 在哪
+          which aarch64-none-linux-gnu-g++     # 看看 g++ 在哪
+          "$QMAKE" -v                          # 输出 qmake 的版本，确保是 Qt 5.14.2
+
+      # 第三步：清理旧的 build 目录，避免脏文件影响
+      - name: Clean build dir
+        run: |
+          rm -rf build
+          mkdir -p build
+
+      # 第四步：用 qmake 配置项目，生成 Makefile
+      - name: Configure (qmake, Release)
+        run: |
+          export PATH="$GCC_BIN:$(dirname "$QMAKE"):$PATH"
+          cd build
+          "$QMAKE" "../$PRO_FILE" \
+            CONFIG+=release \                          # 指定 Release 构建（等价于 Qt Creator 的 Release）
+            QMAKE_CC=aarch64-none-linux-gnu-gcc \      # 指定 C 编译器
+            QMAKE_CXX=aarch64-none-linux-gnu-g++ \     # 指定 C++ 编译器
+            QMAKE_LINK=aarch64-none-linux-gnu-g++      # 指定链接器
+
+
+      # 第五步：执行 make 编译
+      - name: Build
+        run: |
+          export PATH="$GCC_BIN:$(dirname "$QMAKE"):$PATH"
+          cd build
+          make
+
+      # 第六步：（可选）strip 可执行文件，把调试符号去掉，体积小
+      - name: (Optional) Strip binary smaller
+        run: |
+          if [ -f build/DistAreaVoltCtrl ]; then
+            aarch64-none-linux-gnu-strip build/DistAreaVoltCtrl || true
+          fi
+
+      # 第七步：上传构建产物到 GitHub Actions 页面，可以在网页下载
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: rk3568-build     # artifact 的名字
+          path: |
+            build/DistAreaVoltCtrl   # 可执行文件
+            build/*.so               # 如果编译生成了动态库
+            build/*.a                # 如果生成了静态库
+          if-no-files-found: warn
+
+      # 第八步：（可选）把结果拷贝到共享目录，这样 Windows 下立刻能看到
+      - name: Copy to VMware share (optional)
+        run: |
+          if [ -d "$SHARE_DIR" ]; then
+            mkdir -p "$SHARE_DIR/voltctrl-build"
+            rsync -av build/ "$SHARE_DIR/voltctrl-build/"
+            echo "Copied to $SHARE_DIR/voltctrl-build/"
+          else
+            echo "Share dir $SHARE_DIR not found. Skip copy."
+          fi

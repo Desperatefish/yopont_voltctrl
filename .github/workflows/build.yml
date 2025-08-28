@@ -1,11 +1,10 @@
 name: Build RK3568 (qmake Release)
 
-# ====== 触发条件 ======
 on: [push, pull_request]
 
 jobs:
   build:
-    runs-on: self-hosted   # 自托管 runner
+    runs-on: self-hosted
 
     env:
       # ====== 工具链与 qmake 路径（按你的实际修改）======
@@ -22,15 +21,15 @@ jobs:
       # 1) 配置 SSH（强制走 ssh.github.com:443）
       - name: Prepare SSH for GitHub
         env:
-          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}   # 你在 Secrets 里配置的私钥
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
         run: |
           set -e
           mkdir -p ~/.ssh
           echo "$SSH_PRIVATE_KEY" > ~/.ssh/id_ed25519
           chmod 600 ~/.ssh/id_ed25519
-          # 添加 GitHub 公钥，避免交互
+          # 加入 GitHub 公钥，避免交互
           ssh-keyscan -p 443 ssh.github.com >> ~/.ssh/known_hosts
-          # 强制 github.com 映射到 ssh.github.com:443
+          # 强制 github.com 走 ssh.github.com:443
           cat > ~/.ssh/config <<'EOF'
           Host github.com
             HostName ssh.github.com
@@ -38,15 +37,28 @@ jobs:
             User git
           EOF
           chmod 600 ~/.ssh/config
-          # 测试 SSH 是否可用
           ssh -T git@github.com || true
 
-      # 2) 手动 clone 仓库（替代 actions/checkout）
-      - name: Clone repository via SSH
+      # 2) 拉取/更新仓库
+      - name: Fetch or clone repository via SSH
         run: |
-          rm -rf source
-          git clone --depth=1 git@github.com:Desperatefish/yopont_voltctrl.git source
-          cd source
+          set -e
+          REPO_SSH="git@github.com:Desperatefish/yopont_voltctrl.git"
+          TARGET_REF="${GITHUB_REF_NAME:-master}"
+
+          if [ -d source/.git ]; then
+            echo "Repository exists, updating..."
+            cd source
+            git remote set-url origin "$REPO_SSH"
+            git fetch --depth=1 origin "$TARGET_REF"
+            git reset --hard origin/"$TARGET_REF"
+          else
+            echo "Cloning fresh repository..."
+            git clone --depth=1 -b "$TARGET_REF" "$REPO_SSH" source
+            cd source
+          fi
+
+          echo "Checked out branch/ref: $TARGET_REF"
           git log -1 --oneline
 
       # 3) 显示工具链与 qmake 信息

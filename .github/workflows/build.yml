@@ -23,19 +23,6 @@ jobs:
       MAKEFLAGS: -j4
 
     steps:
-      # 0) 准备 known_hosts；如需 SSH 走 443，解除下方三行注释
-      - name: Add github.com to known_hosts
-        run: |
-          mkdir -p ~/.ssh
-          ssh-keyscan github.com >> ~/.ssh/known_hosts
-          ssh-keyscan ssh.github.com >> ~/.ssh/known_hosts
-          # 若 22 端口不通，可走 ssh.github.com:443：
-          # {
-          #   echo "Host github.com"
-          #   echo "  HostName ssh.github.com"
-          #   echo "  Port 443"
-          #   echo "  User git"
-          # } >> ~/.ssh/config
 
       # 1) 拉取代码（复用本机 ~/.ssh/id_ed25519，不用 secrets）
       - name: Checkout code

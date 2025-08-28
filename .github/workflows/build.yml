@@ -25,7 +25,7 @@ jobs:
       - name: Checkout code (SSH)
         uses: actions/checkout@v4
         with:
-          repository: git@github.com:Desperatefish/yopont_voltctrl   # 用 SSH 地址
+          repository: Desperatefish/yopont_voltctrl   # 目标仓库
           fetch-depth: 1                             # 只拉最后一次提交，加快速度
           persist-credentials: false                 # 不使用 GITHUB_TOKEN
           ssh-key: ${{ secrets.SSH_PRIVATE_KEY }}    # 在仓库/组织的 Secrets 里存一把私钥

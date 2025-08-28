@@ -14,8 +14,7 @@ int main(int argc, char *argv[])
     Logger::instance().setLogDirectory("/userdata/ems/modbus/log");
     Logger::instance().setMinLevel(Logger::Info);
     QTextCodec::setCodecForLocale(QTextCodec::codecForName("UTF-8"));
-    qSetMessagePattern("[%{time yyyy-MM-dd hh:mm:ss.zzz}] "
-                           "%{type} (%{function}) - %{message}");
+
 
     QModbusTcpClient modbusDevice;
     modbusDevice.setConnectionParameter(QModbusDevice::NetworkAddressParameter, "127.0.0.1");

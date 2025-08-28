@@ -1,24 +1,79 @@
-name: Debug SSH Secret
+name: Build RK3568 (qmake Release)
 
-on:
-  workflow_dispatch:   # 手动触发，避免每次push都跑
+on: [push, pull_request]
 
 jobs:
-  debug:
+  build:
     runs-on: self-hosted
-    steps:
-      - name: Check if SSH_PRIVATE_KEY is injected
-        run: |
-          if [ -z "${SSH_PRIVATE_KEY}" ]; then
-            echo "❌ Secret SSH_PRIVATE_KEY is EMPTY or not injected"
-            exit 1
-          else
-            echo "✅ Secret loaded"
-            echo "Length: ${#SSH_PRIVATE_KEY}"
-            echo "First 50 chars:"
-            echo "${SSH_PRIVATE_KEY:0:50}..."
-          fi
-        env:
-          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
 
-          
+    env:
+      TOOLCHAIN: /rk3568/gcc-arm-10.3-2021.07-x86_64-aarch64-none-linux-gnu
+      GCC_BIN:  /rk3568/gcc-arm-10.3-2021.07-x86_64-aarch64-none-linux-gnu/bin/
+      QMAKE:    /rk3568/gcc-arm-10.3-2021.07-x86_64-aarch64-none-linux-gnu/Qt-5.14.2-arm64/bin/qmake
+
+      PRO_FILE: modbus_tool.pro
+      SHARE_DIR: /mnt/hgfs/share
+      MAKEFLAGS: -j4
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+          submodules: false
+
+      - name: Show toolchain & qmake
+        run: |
+          export PATH="$GCC_BIN:$(dirname "$QMAKE"):$PATH"
+          which aarch64-none-linux-gnu-gcc && aarch64-none-linux-gnu-gcc --version
+          which aarch64-none-linux-gnu-g++
+          [ -x "$QMAKE" ] || { echo "qmake not found at $QMAKE"; exit 1; }
+          "$QMAKE" -v
+
+      - name: Clean build dir
+        run: |
+          rm -rf build && mkdir -p build
+
+      - name: Configure (qmake, Release)
+        run: |
+          export PATH="$GCC_BIN:$(dirname "$QMAKE"):$PATH"
+          cd build
+          "$QMAKE" "../$PRO_FILE" \
+            CONFIG+=release \
+            QMAKE_CC=aarch64-none-linux-gnu-gcc \
+            QMAKE_CXX=aarch64-none-linux-gnu-g++ \
+            QMAKE_LINK=aarch64-none-linux-gnu-g++
+
+      - name: Build
+        run: |
+          export PATH="$GCC_BIN:$(dirname "$QMAKE"):$PATH"
+          cd build
+          make
+
+      - name: Strip binaries (optional)
+        run: |
+          export PATH="$GCC_BIN:$(dirname "$QMAKE"):$PATH"
+          if command -v aarch64-none-linux-gnu-strip >/dev/null 2>&1; then
+            find build -type f -print0 | xargs -0 -I{} sh -c '
+              if file -b "{}" | grep -qi "ELF .* aarch64"; then
+                aarch64-none-linux-gnu-strip "{}" || true
+              fi
+            '
+          fi
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: rk3568-build
+          path: build/**
+          if-no-files-found: warn
+
+      - name: Copy to VMware share (optional)
+        run: |
+          if [ -d "$SHARE_DIR" ]; then
+            mkdir -p "$SHARE_DIR/voltctrl-build"
+            cp -a build/* "$SHARE_DIR/voltctrl-build/" || true
+            echo "Copied to $SHARE_DIR/voltctrl-build/"
+          else
+            echo "Share dir $SHARE_DIR not found. Skip copy."
+          fi

@@ -30,6 +30,7 @@ jobs:
           persist-credentials: false                 # 不使用 GITHUB_TOKEN
           ssh-key: ${{ secrets.SSH_PRIVATE_KEY }}    # 在仓库/组织的 Secrets 里存一把私钥
           ssh-strict: false                          # 禁用严格校验，避免 known_hosts 问题
+          ssh-user: git                              # 关键参数：强制使用 ssh 协议
 
       # 2) 显示工具链与 qmake 信息 —— 确认环境正确
       - name: Show toolchain & qmake

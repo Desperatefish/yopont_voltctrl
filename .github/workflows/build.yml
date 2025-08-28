@@ -1,27 +1,37 @@
 name: Build RK3568 (qmake Release)
 
+# ====== 触发条件 ======
+# push / pull_request 都会触发
 on: [push, pull_request]
 
 jobs:
   build:
-    runs-on: self-hosted
+    # ====== 运行环境 ======
+    runs-on: self-hosted   # 在你自己的自托管 runner 上跑
 
     env:
+      # ====== 工具链与 qmake 路径（按你的机器实际修改）======
       TOOLCHAIN: /rk3568/gcc-arm-10.3-2021.07-x86_64-aarch64-none-linux-gnu
       GCC_BIN:  /rk3568/gcc-arm-10.3-2021.07-x86_64-aarch64-none-linux-gnu/bin/
       QMAKE:    /rk3568/gcc-arm-10.3-2021.07-x86_64-aarch64-none-linux-gnu/Qt-5.14.2-arm64/bin/qmake
 
+      # ====== 项目信息 ======
       PRO_FILE: modbus_tool.pro
       SHARE_DIR: /mnt/hgfs/share
       MAKEFLAGS: -j4
 
     steps:
-      - name: Checkout code
+      # 1) 拉取代码 —— 走 SSH (443)，避免 HTTPS 超时问题
+      - name: Checkout code (SSH)
         uses: actions/checkout@v4
         with:
-          fetch-depth: 1
-          submodules: false
+          repository: Desperatefish/yopont_voltctrl   # 目标仓库
+          fetch-depth: 1                             # 只拉最后一次提交，加快速度
+          persist-credentials: false                 # 不使用 GITHUB_TOKEN
+          ssh-key: ${{ secrets.SSH_PRIVATE_KEY }}    # 在仓库/组织的 Secrets 里存一把私钥
+          ssh-strict: false                          # 禁用严格校验，避免 known_hosts 问题
 
+      # 2) 显示工具链与 qmake 信息 —— 确认环境正确
       - name: Show toolchain & qmake
         run: |
           export PATH="$GCC_BIN:$(dirname "$QMAKE"):$PATH"
@@ -30,10 +40,13 @@ jobs:
           [ -x "$QMAKE" ] || { echo "qmake not found at $QMAKE"; exit 1; }
           "$QMAKE" -v
 
+      # 3) 干净构建目录
       - name: Clean build dir
         run: |
-          rm -rf build && mkdir -p build
+          rm -rf build
+          mkdir -p build
 
+      # 4) qmake 生成 Makefile（Release 配置）
       - name: Configure (qmake, Release)
         run: |
           export PATH="$GCC_BIN:$(dirname "$QMAKE"):$PATH"
@@ -42,14 +55,19 @@ jobs:
             CONFIG+=release \
             QMAKE_CC=aarch64-none-linux-gnu-gcc \
             QMAKE_CXX=aarch64-none-linux-gnu-g++ \
-            QMAKE_LINK=aarch64-none-linux-gnu-g++
+            QMAKE_LINK=aarch64-none-linux-gnu-g++ \
+            QMAKE_AR="aarch64-none-linux-gnu-ar cqs" \
+            QMAKE_OBJCOPY=aarch64-none-linux-gnu-objcopy \
+            QMAKE_STRIP=aarch64-none-linux-gnu-strip
 
+      # 5) 编译
       - name: Build
         run: |
           export PATH="$GCC_BIN:$(dirname "$QMAKE"):$PATH"
           cd build
           make
 
+      # 6) （可选）strip 瘦身 —— 只处理 aarch64 ELF
       - name: Strip binaries (optional)
         run: |
           export PATH="$GCC_BIN:$(dirname "$QMAKE"):$PATH"
@@ -61,13 +79,15 @@ jobs:
             '
           fi
 
+      # 7) 上传产物到 GitHub（Actions 页面→Artifacts 可下载）
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: rk3568-build
-          path: build/**
+          path: build/**               # ** 能递归包含所有文件
           if-no-files-found: warn
 
+      # 8) （可选）拷到 VMware 共享目录
       - name: Copy to VMware share (optional)
         run: |
           if [ -d "$SHARE_DIR" ]; then

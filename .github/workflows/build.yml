@@ -8,7 +8,6 @@ jobs:
 
     env:
       # 工具链与 qmake 路径 —— 按需改成你的实际路径
-      
       TOOLCHAIN: /rk3568/gcc-arm-10.3-2021.07-x86_64-aarch64-none-linux-gnu
       GCC_BIN:  /rk3568/gcc-arm-10.3-2021.07-x86_64-aarch64-none-linux-gnu/bin/
       QMAKE:    /rk3568/gcc-arm-10.3-2021.07-x86_64-aarch64-none-linux-gnu/Qt-5.14.2-arm64/bin/qmake
@@ -23,13 +22,12 @@ jobs:
       MAKEFLAGS: -j4
 
     steps:
-
-      # 1) 拉取代码（复用本机 ~/.ssh/id_ed25519，不用 secrets）
-      - name: Checkout code
+      # 1) 拉取代码（SSH over 443）
+      - name: Checkout code (SSH over 443)
         uses: actions/checkout@v4
         with:
-          fetch-depth: 1
-          persist-credentials: false
+          repository: Desperatefish/yopont_voltctrl
+          ssh-key: ${{ secrets.SSH_PRIVATE_KEY }}
 
       # 2) 显示工具链与 qmake 信息
       - name: Show toolchain & qmake
@@ -55,7 +53,6 @@ jobs:
             QMAKE_CC=aarch64-none-linux-gnu-gcc \
             QMAKE_CXX=aarch64-none-linux-gnu-g++ \
             QMAKE_LINK=aarch64-none-linux-gnu-g++
-
 
       # 5) 编译
       - name: Build

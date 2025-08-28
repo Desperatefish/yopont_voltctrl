@@ -22,7 +22,7 @@ jobs:
       - name: Checkout code (SSH over 443)
         uses: actions/checkout@v4
         with:
-          repository: Desperatefish/yopont_voltctrl
+          repository: ssh://git@ssh.github.com:443/Desperatefish/yopont_voltctrl.git
           fetch-depth: 1
           persist-credentials: false
           ssh-key: ${{ secrets.SSH_PRIVATE_KEY }}

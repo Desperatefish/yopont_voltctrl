@@ -7,33 +7,32 @@ jobs:
     runs-on: self-hosted
 
     env:
-      # 工具链与 qmake 路径 —— 按需改成你的实际路径
+      # ====== 工具链与 qmake 路径（按你的机器实际改）======
       TOOLCHAIN: /rk3568/gcc-arm-10.3-2021.07-x86_64-aarch64-none-linux-gnu
       GCC_BIN:  /rk3568/gcc-arm-10.3-2021.07-x86_64-aarch64-none-linux-gnu/bin/
       QMAKE:    /rk3568/gcc-arm-10.3-2021.07-x86_64-aarch64-none-linux-gnu/Qt-5.14.2-arm64/bin/qmake
 
-      # 你的 .pro 文件名
+      # ====== 项目信息 ======
       PRO_FILE: modbus_tool.pro
-
-      # 可选：VMware 共享目录（若不需要可删掉“Copy to VMware share”步骤）
       SHARE_DIR: /mnt/hgfs/share
-
-      # 并发编译度（make 会自动读取）
       MAKEFLAGS: -j4
 
     steps:
-      # 1) 拉取代码（SSH over 443）
+      # 1) 拉取代码（SSH over 443, 无 ~/.ssh 改动）
       - name: Checkout code (SSH over 443)
         uses: actions/checkout@v4
         with:
           repository: Desperatefish/yopont_voltctrl
+          fetch-depth: 1
+          persist-credentials: false
           ssh-key: ${{ secrets.SSH_PRIVATE_KEY }}
+          ssh-strict: false
 
       # 2) 显示工具链与 qmake 信息
       - name: Show toolchain & qmake
         run: |
           export PATH="$GCC_BIN:$(dirname "$QMAKE"):$PATH"
-          which aarch64-none-linux-gnu-gcc
+          which aarch64-none-linux-gnu-gcc && aarch64-none-linux-gnu-gcc --version
           which aarch64-none-linux-gnu-g++
           "$QMAKE" -v
 
@@ -62,10 +61,11 @@ jobs:
           make
 
       # 6) （可选）strip 瘦身
-      - name: Strip binary (optional)
+      - name: Strip binaries (optional)
         run: |
-          if [ -f build/DistAreaVoltCtrl ]; then
-            aarch64-none-linux-gnu-strip build/DistAreaVoltCtrl || true
+          export PATH="$GCC_BIN:$(dirname "$QMAKE"):$PATH"
+          if command -v aarch64-none-linux-gnu-strip >/dev/null 2>&1; then
+            find build -type f -exec sh -c 'file -b "$1" | grep -qi "ELF .* aarch64" && aarch64-none-linux-gnu-strip "$1" || true' _ {} \;
           fi
 
       # 7) 上传产物到 GitHub（Actions 页面→Artifacts 可下载）
@@ -73,18 +73,15 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: rk3568-build
-          path: |
-            build/DistAreaVoltCtrl
-            build/*.so
-            build/*.a
+          path: build/*
           if-no-files-found: warn
 
-      # 8) （可选）拷到 VMware 共享目录，Windows 立刻可见
+      # 8) （可选）拷到 VMware 共享目录
       - name: Copy to VMware share (optional)
         run: |
           if [ -d "$SHARE_DIR" ]; then
             mkdir -p "$SHARE_DIR/voltctrl-build"
-            rsync -av build/ "$SHARE_DIR/voltctrl-build/"
+            cp -a build/* "$SHARE_DIR/voltctrl-build/" || true
             echo "Copied to $SHARE_DIR/voltctrl-build/"
           else
             echo "Share dir $SHARE_DIR not found. Skip copy."

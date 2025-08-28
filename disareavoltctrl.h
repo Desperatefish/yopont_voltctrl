@@ -5,6 +5,7 @@
 #include <QTime>
 #include <QtMath>
 #include <QStringList>
+#include <Logger.h>
 
 // ================= 台区治理策略参数结构体 =================
 typedef struct {
@@ -68,7 +69,7 @@ typedef struct {
     // ---------- 策略配置 ----------
     uint16_t voltageRegulationEnable;         // 电压治理使能 (0/1)
     float    voltageTargetDeadband;           // 电压目标值死区 (V)
-    uint16_t regulationPeriod;                // 调节周期
+    uint16_t regulationPeriod;                // 调节周期(s)
     float    regulationStep;                  // 调节步长 (kW)
 
     // 24 小时策略设置
@@ -169,7 +170,7 @@ enum class AppStatusCode : uint16_t {
     RemoteSetpoint  = 3,  // 下发了遥调（功率设定）
     WrongParams     = 4,  // 错误传参
     FirstRun        = 5,  // 首次运行
-    Disable         = 6,  // 未使能
+    Disable          = 6,  // 未使能
     CommFault       = 7,  // 通讯异常
     EquipmentFault  = 8   // 设备故障
 };

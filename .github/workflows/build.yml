@@ -8,12 +8,13 @@ jobs:
 
     env:
       # 工具链与 qmake 路径 —— 按需改成你的实际路径
-      TOOLCHAIN: /home/eric/gcc-arm-10.3-2021.07-x86_64-aarch64-none-linux-gnu
-      GCC_BIN:  /home/eric/gcc-arm-10.3-2021.07-x86_64-aarch64-none-linux-gnu/bin
-      QMAKE:    /home/eric/gcc-arm-10.3-2021.07-x86_64-aarch64-none-linux-gnu/Qt-5.14.2-arm64/bin/qmake
+      
+      TOOLCHAIN: /rk3568/gcc-arm-10.3-2021.07-x86_64-aarch64-none-linux-gnu
+      GCC_BIN:  /rk3568/gcc-arm-10.3-2021.07-x86_64-aarch64-none-linux-gnu/bin/
+      QMAKE:    /rk3568/gcc-arm-10.3-2021.07-x86_64-aarch64-none-linux-gnu/Qt-5.14.2-arm64/bin/qmake
 
       # 你的 .pro 文件名
-      PRO_FILE: DistAreaVoltCtrl.pro
+      PRO_FILE: modbus_tool.pro
 
       # 可选：VMware 共享目录（若不需要可删掉“Copy to VMware share”步骤）
       SHARE_DIR: /mnt/hgfs/share

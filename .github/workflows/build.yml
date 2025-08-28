@@ -1,16 +1,14 @@
 name: Build RK3568 (qmake Release)
 
 # ====== 触发条件 ======
-# push / pull_request 都会触发
 on: [push, pull_request]
 
 jobs:
   build:
-    # ====== 运行环境 ======
-    runs-on: self-hosted   # 在你自己的自托管 runner 上跑
+    runs-on: self-hosted   # 自托管 runner
 
     env:
-      # ====== 工具链与 qmake 路径（按你的机器实际修改）======
+      # ====== 工具链与 qmake 路径（按你的实际修改）======
       TOOLCHAIN: /rk3568/gcc-arm-10.3-2021.07-x86_64-aarch64-none-linux-gnu
       GCC_BIN:  /rk3568/gcc-arm-10.3-2021.07-x86_64-aarch64-none-linux-gnu/bin/
       QMAKE:    /rk3568/gcc-arm-10.3-2021.07-x86_64-aarch64-none-linux-gnu/Qt-5.14.2-arm64/bin/qmake
@@ -21,18 +19,37 @@ jobs:
       MAKEFLAGS: -j4
 
     steps:
-      # 1) 拉取代码 —— 走 SSH (443)，避免 HTTPS 超时问题
-      - name: Checkout code (SSH)
-        uses: actions/checkout@v4
-        with:
-          repository: Desperatefish/yopont_voltctrl   # 目标仓库
-          fetch-depth: 1                             # 只拉最后一次提交，加快速度
-          persist-credentials: false                 # 不使用 GITHUB_TOKEN
-          ssh-key: ${{ secrets.SSH_PRIVATE_KEY }}    # 在仓库/组织的 Secrets 里存一把私钥
-          ssh-strict: false                          # 禁用严格校验，避免 known_hosts 问题
-          ssh-user: git                              # 关键参数：强制使用 ssh 协议
+      # 1) 配置 SSH（强制走 ssh.github.com:443）
+      - name: Prepare SSH for GitHub
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}   # 你在 Secrets 里配置的私钥
+        run: |
+          set -e
+          mkdir -p ~/.ssh
+          echo "$SSH_PRIVATE_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          # 添加 GitHub 公钥，避免交互
+          ssh-keyscan -p 443 ssh.github.com >> ~/.ssh/known_hosts
+          # 强制 github.com 映射到 ssh.github.com:443
+          cat > ~/.ssh/config <<'EOF'
+          Host github.com
+            HostName ssh.github.com
+            Port 443
+            User git
+          EOF
+          chmod 600 ~/.ssh/config
+          # 测试 SSH 是否可用
+          ssh -T git@github.com || true
 
-      # 2) 显示工具链与 qmake 信息 —— 确认环境正确
+      # 2) 手动 clone 仓库（替代 actions/checkout）
+      - name: Clone repository via SSH
+        run: |
+          rm -rf source
+          git clone --depth=1 git@github.com:Desperatefish/yopont_voltctrl.git source
+          cd source
+          git log -1 --oneline
+
+      # 3) 显示工具链与 qmake 信息
       - name: Show toolchain & qmake
         run: |
           export PATH="$GCC_BIN:$(dirname "$QMAKE"):$PATH"
@@ -41,18 +58,18 @@ jobs:
           [ -x "$QMAKE" ] || { echo "qmake not found at $QMAKE"; exit 1; }
           "$QMAKE" -v
 
-      # 3) 干净构建目录
+      # 4) 干净构建目录
       - name: Clean build dir
         run: |
           rm -rf build
           mkdir -p build
 
-      # 4) qmake 生成 Makefile（Release 配置）
+      # 5) qmake 生成 Makefile（Release 配置）
       - name: Configure (qmake, Release)
         run: |
           export PATH="$GCC_BIN:$(dirname "$QMAKE"):$PATH"
           cd build
-          "$QMAKE" "../$PRO_FILE" \
+          "$QMAKE" "../source/$PRO_FILE" \
             CONFIG+=release \
             QMAKE_CC=aarch64-none-linux-gnu-gcc \
             QMAKE_CXX=aarch64-none-linux-gnu-g++ \
@@ -61,14 +78,14 @@ jobs:
             QMAKE_OBJCOPY=aarch64-none-linux-gnu-objcopy \
             QMAKE_STRIP=aarch64-none-linux-gnu-strip
 
-      # 5) 编译
+      # 6) 编译
       - name: Build
         run: |
           export PATH="$GCC_BIN:$(dirname "$QMAKE"):$PATH"
           cd build
           make
 
-      # 6) （可选）strip 瘦身 —— 只处理 aarch64 ELF
+      # 7) （可选）strip 瘦身
       - name: Strip binaries (optional)
         run: |
           export PATH="$GCC_BIN:$(dirname "$QMAKE"):$PATH"
@@ -80,15 +97,15 @@ jobs:
             '
           fi
 
-      # 7) 上传产物到 GitHub（Actions 页面→Artifacts 可下载）
+      # 8) 上传产物到 GitHub Artifacts
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: rk3568-build
-          path: build/**               # ** 能递归包含所有文件
+          path: build/**
           if-no-files-found: warn
 
-      # 8) （可选）拷到 VMware 共享目录
+      # 9) （可选）拷到 VMware 共享目录
       - name: Copy to VMware share (optional)
         run: |
           if [ -d "$SHARE_DIR" ]; then
